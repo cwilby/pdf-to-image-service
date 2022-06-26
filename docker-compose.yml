@@ -1,8 +1,18 @@
 version: "3"
 
+networks:
+  web:
+    external: true
+
 services:
   pdfbox:
     build: .
-    ports:
-      - 8000:8000
-    
+    networks:
+      - web
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    labels:
+      traefik.docker.network: web
+      traefik.http.routers.pdftoimage.rule: Host(`pdf2image.cwserve.com`)
+      traefik.http.routers.pdftoimage.tls: true
+      traefik.http.routers.pdftoimage.tls.certresolver: letsencrypt
