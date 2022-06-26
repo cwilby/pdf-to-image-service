@@ -23,47 +23,31 @@ app.get('/health', (req, res) => res.sendStatus(200));
 app.post('/pdf-to-jpg', upload.single('pdf'), async (req, res) => {
 	const uploadDirectory = path.resolve(__dirname, 'uploads');
 	const pdfPath = path.resolve(uploadDirectory, req.file.filename);
-	const zipPath = path.resolve(uploadDirectory, req.file.filename.replace('.pdf', '.zip'));
 
 	await new PDFBox().exec("PDFToImage", pdfPath);
 
 	fs.rmSync(pdfPath);
 
-	const output = fs.createWriteStream(zipPath);
-	const archive = archiver('zip', {
-		zlib: { level: 9 } // Sets the compression level.
-	});
+	const archive = archiver('zip');
+	res.attachment(`${Date.now()}.zip`);
+	archive.on('error', () => res.sendStatus(500));
+	archive.pipe(res);
 
-	archive.on('close', () => {
-		res.sendFile(zipPath);
+	for (const pageImage of fs.readdirSync(uploadDirectory)) {
+		if (pageImage === '.gitignore') continue;
 
-		res.on('finish', () => {
-			fs.readDir(uploadDirectory, function (err, files) {
-				for (const file of files) {
-					const filePath = path.resolve(uploadDirectory, file);
-					
-					fs.rmSync(filePath);
-				}
-			});
-		});
-	})
+		archive.file(path.resolve(uploadDirectory, pageImage), { name: path.basename(pageImage) });
+	}
 
-	archive.on('error', function (err) {
-		throw err;
-	});
+	archive.finalize();
 
-	archive.pipe(output);
+	res.on('finish', () => {
+		for (const file of fs.readdirSync(uploadDirectory)) {
+			if (file === '.gitignore') continue;
 
-	fs.readDir(uploadDirectory, function (err, files) {
-		for (const file of files) {
-			const filePath = path.resolve(uploadDirectory, file);
-			const stream = fs.createReadStream(filePath);
-			archive.append(stream, { name: file });
+			fs.rmSync(path.resolve(uploadDirectory, file));
 		}
-
-		archive.finalize();
 	});
-
 });
 
 app.listen(8000);
